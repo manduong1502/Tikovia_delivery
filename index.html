@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="vi" class="h-full">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    
+    <title>Smart Logistics Pro</title>
+    <meta name="description" content="Ứng dụng quản lý giao hàng thông minh" />
+
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#2563eb" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="SmartLogistics" />
+    <link rel="apple-touch-icon" href="./icons/icon-192x192.png" />
+
+    <style>
+        body, html, #app { 
+            margin: 0; 
+            width: 100%; 
+            height: 100%; 
+            overflow: hidden; 
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        * {
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
+        }
+        /* CSS quan trọng: Đảm bảo container của Leaflet luôn có màu nền hiển thị */
+        .leaflet-container { 
+            background-color: #f3f4f6 !important; 
+            width: 100% !important;
+            height: 100% !important;
+            display: block !important;
+            position: relative !important;
+            z-index: 1 !important;
+            opacity: 1 !important;
+            top: 0 !important;
+            left: 0 !important;
+        }
+        .leaflet-pane {
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            -webkit-backface-visibility: visible;
+            backface-visibility: visible;
+            -webkit-perspective: none;
+            perspective: none;
+            transform: none !important;
+            -webkit-transform: none !important;
+        }
+        .leaflet-tile-pane {
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            z-index: 2 !important;
+            -webkit-backface-visibility: visible;
+            backface-visibility: visible;
+            image-rendering: crisp-edges;
+            image-rendering: -webkit-optimize-contrast;
+        }
+        .leaflet-overlay-pane {
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            z-index: 400 !important;
+            -webkit-backface-visibility: visible;
+            backface-visibility: visible;
+        }
+        .leaflet-tile {
+            display: block !important;
+            opacity: 1 !important;
+            image-rendering: crisp-edges;
+            image-rendering: -webkit-optimize-contrast;
+        }
+        .leaflet-map-pane svg,
+        .leaflet-map-pane canvas {
+            display: block !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+            -webkit-backface-visibility: visible;
+            backface-visibility: visible;
+            image-rendering: crisp-edges;
+            image-rendering: -webkit-optimize-contrast;
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="h-full">
+    <div id="app" class="h-full"></div>
+    <script type="module" src="./src/app.ts"></script>   
+</body>
+</html>

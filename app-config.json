@@ -1,0 +1,33 @@
+{
+  "app": {
+    "title": "Tikovia Smart Logistics",
+    "textColor": {
+      "light": "black",
+      "dark": "white"
+    },
+    "statusBar": "transparent",
+    "actionBarHidden": true,
+    "hideIOSSafeAreaBottom": true,
+    "hideAndroidBottomNavigationBar": false
+  },
+  "permissions": {
+    "getLocation": {
+      "description": "Ứng dụng cần vị trí của bạn để tính toán quãng đường giao hàng"
+    },
+    "api": [
+      "openWebview", 
+      "getLocation",
+      "getPhoneNumber", 
+      "getUserInfo"
+    ]
+  },
+  "network": {
+    "validDomains": [
+      "https://router.project-osrm.org",
+      "https://nominatim.openstreetmap.org"
+    ]
+  },
+  "listCSS": [],
+  "listSyncJS": [],
+  "listAsyncJS": []
+}

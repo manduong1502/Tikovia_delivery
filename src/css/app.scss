@@ -1,0 +1,27 @@
+.page {
+  padding: 16px 16px 96px 16px;
+}
+
+.section-container {
+  padding: 16px;
+  background: #ffffff;
+  border-radius: 8px;
+  margin-bottom: 24px;
+}
+
+.zaui-list-item {
+  cursor: pointer;
+}
+
+/* Leaflet map styles */
+.leaflet-container {
+  background-color: #f3f4f6 !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.driver-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
