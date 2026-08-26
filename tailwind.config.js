@@ -1,9 +1,6 @@
 module.exports = {
   darkMode: ["selector", '[zaui-theme="dark"]'],
-  purge: {
-    enabled: true,
-    content: ["./src/**/*.{js,jsx,ts,tsx,vue}"],
-  },
+  content: ["./src/**/*.{js,jsx,ts,tsx,vue}", "./index.html"],
   theme: {
     extend: {
       fontFamily: {
