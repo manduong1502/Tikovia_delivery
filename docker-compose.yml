@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  # 1. TIKOVIA DELIVERY - BACKEND API (Node.js + Express + PostgreSQL Dual-Sync)
+  tiko-delivery-api:
+    container_name: tiko-delivery-api
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "4003:4003"
+    environment:
+      - PORT=4003
+      - DB_HOST=${DB_HOST:-host.docker.internal}
+      - DB_PORT=${DB_PORT:-5433}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - DB_NAME=${DB_NAME:-tikovia_delivery}
+      - GOOGLE_SCRIPT_URL=${GOOGLE_SCRIPT_URL:-https://script.google.com/macros/s/AKfycbxIN0yxGmHN2GELHmaiGkfeekOyQt8sJjUNU_gRqOBtgcqZfb98P6J3qQK_pGWlGG0l/exec}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # 2. TIKOVIA DELIVERY - FRONTEND WEB (React Vite PWA + Nginx)
+  tiko-delivery-web:
+    container_name: tiko-delivery-web
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    restart: always
+    ports:
+      - "4002:80"
+
+networks:
+  default:
+    name: tiko-network

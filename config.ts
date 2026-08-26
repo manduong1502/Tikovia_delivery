@@ -5,8 +5,8 @@
 export const APP_CONFIG = {
     GOOGLE_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbxIN0yxGmHN2GELHmaiGkfeekOyQt8sJjUNU_gRqOBtgcqZfb98P6J3qQK_pGWlGG0l/exec', // <--- DÁN LINK CỦA BẠN VÀO GIỮA 2 DẤU NHÁY NÀY
     
-    // Để trống dòng dưới nếu dùng Google
-    API_BASE_URL: '', 
+    // Backend API Mini Server Ubuntu (Cloudflare Tunnel)
+    API_BASE_URL: 'https://api-delivery.tikovia.vn', 
     DRIVER_SHARED_SECRET: 'tikovia-driver-secure-key-2026-change-me',
 };
 

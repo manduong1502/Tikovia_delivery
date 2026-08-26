@@ -67,15 +67,15 @@ export const getOrders = async (): Promise<Order[]> => {
 
     if (isServerMode()) {
         try {
-            const res = await fetch(`${APP_CONFIG.API_BASE_URL}/api/orders/by-driver`, {
+            const res = await fetch(`${APP_CONFIG.API_BASE_URL}/api/orders`, {
                 headers: {
-                    'X-Tenant-Subdomain': 'demo',
+                    'Content-Type': 'application/json',
                     'Authorization': `Bearer ${APP_CONFIG.DRIVER_SHARED_SECRET || 'tikovia-driver-secure-key-2026-change-me'}`
                 }
             });
             if (res.ok) {
                 const serverOrders = await res.json();
-                if (Array.isArray(serverOrders)) {
+                if (Array.isArray(serverOrders) && serverOrders.length > 0) {
                     const merged = serverOrders.map((so: Order) => {
                         if (syncingOrders.has(so.id)) {
                             return localOrders.find(o => o.id === so.id) || so;
@@ -88,7 +88,7 @@ export const getOrders = async (): Promise<Order[]> => {
                 }
             }
         } catch (err) {
-            console.warn("POS API fetch error, falling back to Google Sheets:", err);
+            console.warn("Backend PostgreSQL API fetch error, falling back to Google Sheets:", err);
         }
     }
 
@@ -140,27 +140,25 @@ export const updateOrder = async (updatedOrder: Order): Promise<Order> => {
     localOrders = localOrders.map((o) => (o.id === updatedOrder.id ? updatedOrder : o));
     saveLocalOrders();
 
-    // 2. Sync to BizPOS API Server if configured
+    // 2. Sync to Backend API Server if configured
     if (isServerMode()) {
         try {
-            const orderCode = updatedOrder.id.replace('DH-', '');
-            await fetch(`${APP_CONFIG.API_BASE_URL}/api/orders/by-code/${orderCode}/driver-status`, {
+            await fetch(`${APP_CONFIG.API_BASE_URL}/api/orders/${updatedOrder.id}/status`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-Tenant-Subdomain': 'demo',
                     'Authorization': `Bearer ${APP_CONFIG.DRIVER_SHARED_SECRET || 'tikovia-driver-secure-key-2026-change-me'}`
                 },
                 body: JSON.stringify({
-                    driverId: updatedOrder.driverId || '',
-                    driverName: updatedOrder.driverName || '',
-                    deliveryStatus: updatedOrder.status,
-                    codAmount: updatedOrder.codTransaction?.amount,
-                    paymentMethod: updatedOrder.codTransaction?.method
+                    status: updatedOrder.status,
+                    podImageUrl: updatedOrder.proofOfDelivery?.imageUrl,
+                    podSignature: updatedOrder.proofOfDelivery?.signature,
+                    note: updatedOrder.note,
+                    codAmount: updatedOrder.codTransaction?.amount
                 })
             });
         } catch (err) {
-            console.warn("POS API Driver Status Sync Error:", err);
+            console.warn("Backend API status sync error:", err);
         }
     }
 
