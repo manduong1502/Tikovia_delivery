@@ -14,8 +14,8 @@ services:
       - PORT=4003
       - DB_HOST=${DB_HOST:-host.docker.internal}
       - DB_PORT=${DB_PORT:-5433}
-      - DB_USER=${DB_USER:-postgres}
-      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - DB_USER=${DB_USER:-tikovia}
+      - DB_PASSWORD=${DB_PASSWORD:-tikovia_secure_2026}
       - DB_NAME=${DB_NAME:-tikovia_delivery}
       - GOOGLE_SCRIPT_URL=${GOOGLE_SCRIPT_URL:-https://script.google.com/macros/s/AKfycbxIN0yxGmHN2GELHmaiGkfeekOyQt8sJjUNU_gRqOBtgcqZfb98P6J3qQK_pGWlGG0l/exec}
     extra_hosts:
