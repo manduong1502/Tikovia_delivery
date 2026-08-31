@@ -1,7 +1,20 @@
 #!/bin/bash
 # ==============================================================================
-# TIKOVIA DELIVERY - AUTO DEPLOY SCRIPT TRÊN VPS / MINI SERVER UBUNTU
-# Thư mục triển khai: /mnt/ssd500/tiko/tikovia-delivery (hoặc ~/tikovia-delivery)
+# TIKOVIA DELIVERY - CẨM NANG & LỆNH CẬP NHẬT TRÊN VPS (SSH TERMINAL)
+# Thư mục triển khai trên VPS: /mnt/ssd500/tiko/tikovia-delivery
+# ==============================================================================
+#
+# 📌 CÁC LỆNH SỬ DỤNG HÀNG NGÀY TRÊN TERMINAL SSH:
+#
+# 1. Khi vừa push code xong, muốn cập nhật nhanh code & build lại container (DÙNG THƯỜNG XUYÊN):
+#    sudo git fetch --all && sudo git reset --hard origin/main && sudo docker compose up -d --build
+#
+# 2. Khi có sửa đổi hoặc thêm bảng mới trong database (server/schema.sql):
+#    sudo docker exec -i tiko-bizpos-db psql -U tikovia -d tikovia_delivery < server/schema.sql
+#
+# 3. Hoặc chạy tự động toàn bộ quy trình bằng 1 lệnh:
+#    bash deploy.sh
+#
 # ==============================================================================
 
 set -e
