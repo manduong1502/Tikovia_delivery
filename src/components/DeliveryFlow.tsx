@@ -3,6 +3,7 @@ import { Order, OrderStatus, GeoLocation, PaymentMethod, ProofOfDelivery } from 
 import { calculateDistance, getCurrentLocation } from '../services/geoService';
 import { sendDriverLocation, removeDriverLocation } from '../services/trackingService';
 import { updateOrder } from '../services/mockDb';
+import { getCurrentUser } from '../services/authService';
 import CameraCapture from './CameraCapture';
 import MapTracker from './MapTracker';
 

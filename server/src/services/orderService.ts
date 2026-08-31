@@ -144,11 +144,21 @@ export const orderService = {
     codAmount?: number;
     completedAtFormatted?: string;
     overtimeString?: string;
+    driverId?: string;
+    driverName?: string;
   }) {
     const fields: string[] = ['status = $2', 'updated_at = NOW()'];
     const values: any[] = [id, status];
     let idx = 3;
 
+    if (podData?.driverId) {
+      fields.push(`driver_id = $${idx++}`);
+      values.push(podData.driverId);
+    }
+    if (podData?.driverName) {
+      fields.push(`driver_name = $${idx++}`);
+      values.push(podData.driverName);
+    }
     if (podData?.podImageUrl) {
       fields.push(`pod_image_url = $${idx++}`);
       values.push(podData.podImageUrl);

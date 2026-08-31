@@ -146,6 +146,8 @@ export const updateOrder = async (updatedOrder: Order): Promise<Order> => {
                 },
                 body: JSON.stringify({
                     status: updatedOrder.status,
+                    driverId: updatedOrder.driverId,
+                    driverName: updatedOrder.driverName,
                     podImageUrl: updatedOrder.proofOfDelivery?.imageUrl,
                     podSignature: (updatedOrder.proofOfDelivery as any)?.signature,
                     note: updatedOrder.note,

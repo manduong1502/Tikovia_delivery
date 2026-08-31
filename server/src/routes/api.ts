@@ -146,7 +146,7 @@ router.post('/orders', async (req, res) => {
 
 router.put('/orders/:id/status', async (req, res) => {
   const { id } = req.params;
-  const { status, podImageUrl, podSignature, note, codAmount, completedAtFormatted, overtimeString } = req.body;
+  const { status, podImageUrl, podSignature, note, codAmount, completedAtFormatted, overtimeString, driverId, driverName } = req.body;
   try {
     const updated = await orderService.updateStatus(id, status, { 
       podImageUrl, 
@@ -154,7 +154,9 @@ router.put('/orders/:id/status', async (req, res) => {
       note, 
       codAmount,
       completedAtFormatted,
-      overtimeString 
+      overtimeString,
+      driverId,
+      driverName
     });
     res.json(updated);
   } catch (error: any) {
