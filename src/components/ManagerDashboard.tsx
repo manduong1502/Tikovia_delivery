@@ -4,7 +4,6 @@ import 'leaflet/dist/leaflet.css';
 import { Order, OrderStatus, User, Customer } from '../types';
 import { createDriver, getAllDrivers } from '../services/authService';
 import { getOrders, getCustomers, addCustomer, deleteOrder } from '../services/mockDb';
-import KiotVietSyncModal from './KiotVietSyncModal';
 import { subscribeToDrivers } from '../services/trackingService';
 import MapPicker from './MapPicker';
 
@@ -140,7 +139,6 @@ const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ orders: initialOrde
     const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'MAP' | 'DRIVERS' | 'CUSTOMERS'>('OVERVIEW');
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
-    const [showKiotVietModal, setShowKiotVietModal] = useState(false);
 
     // --- STATE MỚI: DANH SÁCH TÀI XẾ ONLINE (FIREBASE) ---
     const [liveDrivers, setLiveDrivers] = useState<any[]>([]);
@@ -462,8 +460,6 @@ const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ orders: initialOrde
 
     return (
         <div className="flex flex-col h-full bg-gray-50 relative">
-            {showKiotVietModal && <KiotVietSyncModal onClose={() => setShowKiotVietModal(false)} onSyncComplete={fetchLatestData} />}
-
             {/* Header */}
             <div className="bg-white pt-9 pr-[75px] p-4 shadow-sm flex items-center justify-between sticky top-0 z-10 border-b border-gray-100">
                 <div className="flex items-center gap-2">

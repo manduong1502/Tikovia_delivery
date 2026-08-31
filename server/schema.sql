@@ -2,10 +2,6 @@
 -- TIKOVIA DELIVERY - DATABASE SCHEMA (POSTGRESQL 15+)
 -- ==========================================================
 
--- Tạo database (chạy nếu chưa có):
--- CREATE DATABASE tikovia_delivery;
--- \c tikovia_delivery;
-
 -- 1. BẢNG USERS (Tài xế, Quản lý, Kế toán)
 CREATE TABLE IF NOT EXISTS users (
     id VARCHAR(50) PRIMARY KEY,
@@ -19,7 +15,22 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. BẢNG ORDERS (Đơn hàng giao nhận)
+-- 2. BẢNG CUSTOMERS (Khách hàng)
+CREATE TABLE IF NOT EXISTS customers (
+    id VARCHAR(100) PRIMARY KEY,
+    name VARCHAR(150) NOT NULL,
+    phone VARCHAR(50),
+    address TEXT,
+    lat DOUBLE PRECISION,
+    lng DOUBLE PRECISION,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone);
+CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(name);
+
+-- 3. BẢNG ORDERS (Đơn hàng giao nhận)
 CREATE TABLE IF NOT EXISTS orders (
     id VARCHAR(100) PRIMARY KEY,
     customer_name VARCHAR(150),
@@ -38,6 +49,10 @@ CREATE TABLE IF NOT EXISTS orders (
     driver_name VARCHAR(100),
     pod_image_url TEXT,
     pod_signature TEXT,
+    order_image TEXT,
+    route_id VARCHAR(100),
+    completed_at_formatted VARCHAR(100),
+    overtime_string VARCHAR(100),
     sync_google_status VARCHAR(20) DEFAULT 'SYNCED', -- 'PENDING', 'SYNCED', 'FAILED'
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -47,8 +62,9 @@ CREATE TABLE IF NOT EXISTS orders (
 CREATE INDEX IF NOT EXISTS idx_orders_driver_id ON orders(driver_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_orders_route_id ON orders(route_id);
 
--- 3. BẢNG DRIVER_LOCATIONS (Định vị Live Tài xế)
+-- 4. BẢNG DRIVER_LOCATIONS (Định vị Live Tài xế)
 CREATE TABLE IF NOT EXISTS driver_locations (
     driver_id VARCHAR(50) PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     driver_name VARCHAR(100),
@@ -57,28 +73,57 @@ CREATE TABLE IF NOT EXISTS driver_locations (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 4. BẢNG COD_SETTLEMENTS (Lịch sử Chốt ca thu tiền)
-CREATE TABLE IF NOT EXISTS cod_settlements (
+-- 5. BẢNG SHIFT_REPORTS (Báo cáo Chốt ca / Nộp tuyến tiền COD)
+CREATE TABLE IF NOT EXISTS shift_reports (
     id VARCHAR(100) PRIMARY KEY,
-    driver_id VARCHAR(50) REFERENCES users(id) ON DELETE CASCADE,
+    driver_id VARCHAR(50),
     driver_name VARCHAR(100),
-    shift_date DATE NOT NULL,
-    total_cod_collected NUMERIC(15, 2) DEFAULT 0,
-    total_orders_completed INT DEFAULT 0,
-    status VARCHAR(30) DEFAULT 'APPROVED',
-    approved_by VARCHAR(100),
+    driver_username VARCHAR(100),
+    shift_name VARCHAR(150),
+    total_delivered INT DEFAULT 0,
+    total_order_value NUMERIC(15, 2) DEFAULT 0,
+    total_cod NUMERIC(15, 2) DEFAULT 0,
+    additional_fee NUMERIC(15, 2) DEFAULT 0,
+    fee_note TEXT,
+    fee_image TEXT,
+    shift_images JSONB DEFAULT '[]'::jsonb,
+    status VARCHAR(30) DEFAULT 'PENDING', -- 'PENDING', 'CONFIRMED'
+    confirmed_by VARCHAR(100),
+    confirmed_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 5. SEED DỮ LIỆU TÀI KHOẢN MẶC ĐỊNH (Tương thích Google Sheets hiện tại)
+CREATE INDEX IF NOT EXISTS idx_shift_reports_created_at ON shift_reports(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_shift_reports_driver_username ON shift_reports(driver_username);
+
+-- 6. BẢNG EXPENSES (Khoản chi phát sinh kế toán)
+CREATE TABLE IF NOT EXISTS expenses (
+    id VARCHAR(100) PRIMARY KEY,
+    note TEXT NOT NULL,
+    amount NUMERIC(15, 2) NOT NULL DEFAULT 0,
+    image_url TEXT,
+    accountant_name VARCHAR(100),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_expenses_created_at ON expenses(created_at DESC);
+
+-- 7. SEED DỮ LIỆU TÀI KHOẢN THEO GOOGLE SHEET THỰC TẾ
 INSERT INTO users (id, username, password_hash, full_name, phone, role, status)
 VALUES
-    ('USR-ADMIN', 'admin', '123456', 'Quản Lý Hệ Thống', '0901234567', 'MANAGER', 'ACTIVE'),
-    ('USR-KETOAN', 'ketoan', '123456', 'Kế Toán', '0907654321', 'ACCOUNTANT', 'ACTIVE'),
-    ('USR-LQN', 'Lqn', '123456', 'Lê Quang Ngọc', '0912345678', 'DRIVER', 'ACTIVE'),
-    ('USR-PDP', 'Pdp', '123456', 'Phạm Đình Phi', '0923456789', 'DRIVER', 'ACTIVE'),
-    ('USR-GVT', 'Gvt', '123456', 'Giàng Văn Tuấn', '0934567890', 'DRIVER', 'ACTIVE'),
-    ('USR-NVP', 'Nvp', '123456', 'Nguyễn Vĩnh Phú', '0945678901', 'DRIVER', 'ACTIVE'),
-    ('USR-NTAK', 'Ntak', '123456', 'Ngô Tùng Anh Kha', '0956789012', 'DRIVER', 'ACTIVE'),
-    ('USR-VTD', 'Vtd', '123456', 'Võ Thành Duy', '0967890123', 'DRIVER', 'ACTIVE')
-ON CONFLICT (username) DO NOTHING;
+    ('admin-1', 'admin', '123', 'Quản Lý Hệ Thống', '0901234567', 'MANAGER', 'ACTIVE'),
+    ('KT001', 'ketoan', '123', 'Kế Toán', '0907654321', 'ACCOUNTANT', 'ACTIVE'),
+    ('U177250475416', 'Lqn', '12345', 'Lê Quang Ngọc', '0912345678', 'DRIVER', 'ACTIVE'),
+    ('U177250483001', 'Pdp', '12345', 'Phạm Đình Phi', '0923456789', 'DRIVER', 'ACTIVE'),
+    ('U177250485058', 'Gvt', '12345', 'Giàng Văn Tuấn', '0934567890', 'DRIVER', 'ACTIVE'),
+    ('U177250488602', 'Nvp', '12345', 'Nguyễn Vĩnh Phú', '0945678901', 'DRIVER', 'ACTIVE'),
+    ('U177250491786', 'Ntak', '12345', 'Ngô Tùng Anh Kha', '0956789012', 'DRIVER', 'ACTIVE'),
+    ('U177250493663', 'Vtd', '12345', 'Võ Thành Duy', '0967890123', 'DRIVER', 'ACTIVE')
+ON CONFLICT (username) DO UPDATE SET
+    id = EXCLUDED.id,
+    password_hash = EXCLUDED.password_hash,
+    full_name = EXCLUDED.full_name,
+    role = EXCLUDED.role,
+    status = 'ACTIVE',
+    updated_at = NOW();
+

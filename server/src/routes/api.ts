@@ -1,15 +1,24 @@
 import { Router } from 'express';
-import { query } from '../config/db';
-import { orderService } from '../services/orderService';
+import { 
+  orderService, 
+  userService, 
+  customerService, 
+  shiftReportService, 
+  expenseService 
+} from '../services/orderService';
 
 export const router = Router();
 
-// --- 1. HEALTH CHECK ---
+// ==========================================================
+// 1. HEALTH CHECK
+// ==========================================================
 router.get('/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
-// --- 2. AUTHENTICATION & USERS ---
+// ==========================================================
+// 2. AUTHENTICATION & USERS
+// ==========================================================
 router.post('/auth/login', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
@@ -17,48 +26,98 @@ router.post('/auth/login', async (req, res) => {
   }
 
   try {
-    const result = await query(
-      'SELECT id, username, full_name, phone, role, status FROM users WHERE LOWER(username) = LOWER($1) AND password_hash = $2 AND status = $3',
-      [username.trim(), password.trim(), 'ACTIVE']
-    );
-
-    if (result.rows.length === 0) {
+    const user = await userService.login(username, password);
+    if (!user) {
       return res.status(401).json({ error: 'Sai tên đăng nhập hoặc mật khẩu' });
     }
-
-    const user = result.rows[0];
-    res.json({
-      id: user.id,
-      username: user.username,
-      fullName: user.full_name,
-      phone: user.phone,
-      role: user.role
-    });
+    res.json(user);
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Database error during login' });
   }
 });
 
+router.get('/users', async (req, res) => {
+  try {
+    const users = await userService.getAllUsers();
+    res.json(users);
+  } catch (error) {
+    console.error('Get users error:', error);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
 router.get('/users/drivers', async (req, res) => {
   try {
-    const result = await query(
-      "SELECT id, username, full_name, phone, role FROM users WHERE role = 'DRIVER' AND status = 'ACTIVE' ORDER BY full_name ASC"
-    );
-    res.json(result.rows.map(u => ({
-      id: u.id,
-      username: u.username,
-      fullName: u.full_name,
-      phone: u.phone,
-      role: u.role
-    })));
+    const drivers = await userService.getDrivers();
+    res.json(drivers);
   } catch (error) {
     console.error('Get drivers error:', error);
     res.status(500).json({ error: 'Failed to fetch drivers' });
   }
 });
 
-// --- 3. ORDERS API ---
+router.post('/users/drivers', async (req, res) => {
+  const { username, password, fullName, phone } = req.body;
+  if (!username || !fullName) {
+    return res.status(400).json({ error: 'Username and fullName are required' });
+  }
+
+  try {
+    const driver = await userService.createDriver({ username, password, fullName, phone });
+    res.status(201).json(driver);
+  } catch (error) {
+    console.error('Create driver error:', error);
+    res.status(500).json({ error: 'Failed to create driver' });
+  }
+});
+
+// ==========================================================
+// 3. CUSTOMERS
+// ==========================================================
+router.get('/customers', async (req, res) => {
+  try {
+    const customers = await customerService.getAllCustomers();
+    res.json(customers);
+  } catch (error) {
+    console.error('Get customers error:', error);
+    res.status(500).json({ error: 'Failed to fetch customers' });
+  }
+});
+
+router.post('/customers', async (req, res) => {
+  const { name, phone, address, location, id } = req.body;
+  if (!name) {
+    return res.status(400).json({ error: 'Customer name is required' });
+  }
+
+  try {
+    const created = await customerService.createCustomer({ id, name, phone, address, location });
+    res.status(201).json(created);
+  } catch (error) {
+    console.error('Create customer error:', error);
+    res.status(500).json({ error: 'Failed to create customer' });
+  }
+});
+
+router.get('/customers/search', async (req, res) => {
+  const q = req.query.q as string;
+  if (!q) {
+    return res.json([]);
+  }
+
+  try {
+    const results = await customerService.searchCustomers(q);
+    res.json(results);
+  } catch (error) {
+    console.error('Search customers error:', error);
+    res.status(500).json({ error: 'Failed to search customers' });
+  }
+});
+
+// ==========================================================
+// 4. ORDERS
+// ==========================================================
 router.get('/orders', async (req, res) => {
   const driverId = req.query.driverId as string;
   try {
@@ -87,9 +146,16 @@ router.post('/orders', async (req, res) => {
 
 router.put('/orders/:id/status', async (req, res) => {
   const { id } = req.params;
-  const { status, podImageUrl, podSignature, note, codAmount } = req.body;
+  const { status, podImageUrl, podSignature, note, codAmount, completedAtFormatted, overtimeString } = req.body;
   try {
-    const updated = await orderService.updateStatus(id, status, { podImageUrl, podSignature, note, codAmount });
+    const updated = await orderService.updateStatus(id, status, { 
+      podImageUrl, 
+      podSignature, 
+      note, 
+      codAmount,
+      completedAtFormatted,
+      overtimeString 
+    });
     res.json(updated);
   } catch (error: any) {
     console.error('Update status error:', error);
@@ -120,7 +186,9 @@ router.delete('/orders/:id', async (req, res) => {
   }
 });
 
-// --- 4. GPS TRACKING ---
+// ==========================================================
+// 5. GPS TRACKING
+// ==========================================================
 router.post('/tracking/location', async (req, res) => {
   const { driverId, driverName, lat, lng } = req.body;
   if (!driverId || lat === undefined || lng === undefined) {
@@ -146,23 +214,69 @@ router.get('/tracking/drivers', async (req, res) => {
   }
 });
 
-// --- 5. COD SETTLEMENTS ---
-router.post('/cod/settle', async (req, res) => {
+// ==========================================================
+// 6. SHIFT REPORTS (Chốt ca / Nộp tiền)
+// ==========================================================
+router.get('/shifts', async (req, res) => {
   try {
-    const result = await orderService.recordCodSettlement(req.body);
-    res.json(result);
+    const reports = await shiftReportService.getAllShiftReports();
+    res.json(reports);
   } catch (error) {
-    console.error('COD settlement error:', error);
-    res.status(500).json({ error: 'Failed to settle COD shift' });
+    console.error('Get shift reports error:', error);
+    res.status(500).json({ error: 'Failed to fetch shift reports' });
   }
 });
 
-router.get('/cod/history', async (req, res) => {
+router.post('/shifts', async (req, res) => {
   try {
-    const result = await query('SELECT * FROM cod_settlements ORDER BY created_at DESC LIMIT 100');
-    res.json(result.rows);
+    const report = await shiftReportService.createShiftReport(req.body);
+    res.status(201).json(report);
   } catch (error) {
-    console.error('Get COD history error:', error);
-    res.status(500).json({ error: 'Failed to fetch COD history' });
+    console.error('Create shift report error:', error);
+    res.status(500).json({ error: 'Failed to create shift report' });
   }
 });
+
+router.post('/shifts/confirm', async (req, res) => {
+  const { reportId, confirmedBy } = req.body;
+  if (!reportId) {
+    return res.status(400).json({ error: 'reportId is required' });
+  }
+
+  try {
+    const confirmed = await shiftReportService.confirmShiftReport(reportId, confirmedBy || 'Kế Toán');
+    res.json(confirmed);
+  } catch (error) {
+    console.error('Confirm shift report error:', error);
+    res.status(500).json({ error: 'Failed to confirm shift report' });
+  }
+});
+
+// ==========================================================
+// 7. EXPENSES (Quản lý chi phí kế toán)
+// ==========================================================
+router.get('/expenses', async (req, res) => {
+  try {
+    const expenses = await expenseService.getAllExpenses();
+    res.json(expenses);
+  } catch (error) {
+    console.error('Get expenses error:', error);
+    res.status(500).json({ error: 'Failed to fetch expenses' });
+  }
+});
+
+router.post('/expenses', async (req, res) => {
+  const { expenses, accountantName } = req.body;
+  if (!Array.isArray(expenses)) {
+    return res.status(400).json({ error: 'expenses must be an array' });
+  }
+
+  try {
+    const result = await expenseService.saveExpenses(expenses, accountantName || 'Kế Toán');
+    res.json(result);
+  } catch (error) {
+    console.error('Save expenses error:', error);
+    res.status(500).json({ error: 'Failed to save expenses' });
+  }
+});
+

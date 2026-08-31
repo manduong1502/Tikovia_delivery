@@ -1,6 +1,5 @@
 import { Order, OrderStatus, Customer } from '../types';
 import { getAllDrivers } from './authService';
-import { KVCustomer, KVInvoice } from './kiotVietService';
 import { APP_CONFIG, isServerMode, isGoogleMode } from '../../config';
 import { geocodeAddress } from '../services/geoService';
 
@@ -19,7 +18,6 @@ try {
     const c = localStorage.getItem(CUSTOMERS_STORAGE_KEY);
     if (c) localCustomers = JSON.parse(c);
     else {
-
         localStorage.setItem(CUSTOMERS_STORAGE_KEY, JSON.stringify(localCustomers));
     }
 } catch (e) { console.error("Init DB Error:", e); }
@@ -99,15 +97,13 @@ export const getOrders = async (): Promise<Order[]> => {
                 remote.forEach(order => {
                     if (order.itemsString !== undefined && order.itemsString !== null) {
                         order.items = String(order.itemsString).split('|');
-                    } else {
+                    } else if (!order.items) {
                         order.items = [];
                     }
                     delete order.itemsString;
                     if (!order.note) order.note = "";
                 });
                 
-                // Trộn data: Giữ lại những đơn hàng đang trong quá trình đồng bộ ngầm (isSyncing)
-                // để không bị dữ liệu cũ (chưa kịp lưu) từ Google Sheet đè lên gây lỗi hiển thị màu.
                 const mergedOrders = remote.map((remoteOrder: Order) => {
                     if (syncingOrders.has(remoteOrder.id)) {
                         const existingLocal = localOrders.find(o => o.id === remoteOrder.id);
@@ -116,7 +112,6 @@ export const getOrders = async (): Promise<Order[]> => {
                     return remoteOrder;
                 });
                 
-                // Giữ lại các đơn local mới tạo đang sync mà chưa kịp lên remote
                 localOrders.forEach(local => {
                     if (syncingOrders.has(local.id) && !mergedOrders.find((o: Order) => o.id === local.id)) {
                         mergedOrders.push(local);
@@ -140,7 +135,7 @@ export const updateOrder = async (updatedOrder: Order): Promise<Order> => {
     localOrders = localOrders.map((o) => (o.id === updatedOrder.id ? updatedOrder : o));
     saveLocalOrders();
 
-    // 2. Sync to Backend API Server if configured
+    // 2. Sync to Backend API Server (PostgreSQL)
     if (isServerMode()) {
         try {
             await fetch(`${APP_CONFIG.API_BASE_URL}/api/orders/${updatedOrder.id}/status`, {
@@ -152,9 +147,11 @@ export const updateOrder = async (updatedOrder: Order): Promise<Order> => {
                 body: JSON.stringify({
                     status: updatedOrder.status,
                     podImageUrl: updatedOrder.proofOfDelivery?.imageUrl,
-                    podSignature: updatedOrder.proofOfDelivery?.signature,
+                    podSignature: (updatedOrder.proofOfDelivery as any)?.signature,
                     note: updatedOrder.note,
-                    codAmount: updatedOrder.codTransaction?.amount
+                    codAmount: updatedOrder.codTransaction?.amount,
+                    completedAtFormatted: updatedOrder.completedAtFormatted,
+                    overtimeString: updatedOrder.overtimeString
                 })
             });
         } catch (err) {
@@ -166,8 +163,6 @@ export const updateOrder = async (updatedOrder: Order): Promise<Order> => {
     if (isGoogleMode()) {
         try {
             const res = await callGoogleScript('saveOrder', updatedOrder);
-            console.log("Sync thành công:", res);
-        
             if (res && res.imageUrl && updatedOrder.proofOfDelivery) {
                 updatedOrder.proofOfDelivery.imageUrl = res.imageUrl;
             }
@@ -176,11 +171,9 @@ export const updateOrder = async (updatedOrder: Order): Promise<Order> => {
             }
             localOrders = localOrders.map((o) => (o.id === updatedOrder.id ? updatedOrder : o));
             saveLocalOrders();
-            
         } catch (err) {
             console.error("Lỗi đồng bộ Google Sheets:", err);
         } finally {
-            // Remove from syncing state so future polls can safely get real data
             syncingOrders.delete(updatedOrder.id);
         }
     } else {
@@ -190,8 +183,6 @@ export const updateOrder = async (updatedOrder: Order): Promise<Order> => {
 };
 
 export const deleteOrder = async (orderId: string): Promise<void> => {
-    console.debug(`Attempting to delete order: ${orderId}`);
-
     localOrders = localOrders.filter(o => o.id !== orderId);
     saveLocalOrders();
 
@@ -210,9 +201,7 @@ export const deleteOrder = async (orderId: string): Promise<void> => {
 
     if (isGoogleMode()) {
         try {
-            const result = await callGoogleScript('deleteOrder', orderId);
-            console.debug(`Remote delete success:`, result);
-            return;
+            await callGoogleScript('deleteOrder', orderId);
         } catch (e) {
             console.error("Remote delete failed", e);
         }
@@ -251,6 +240,7 @@ export const createOrder = async (
         finalDriverId = randomDriver.id;
         finalDriverName = randomDriver.fullName;
     }
+
     const newOrder: Order = {
         id: `DH-${Math.floor(Math.random() * 90000) + 10000}`,
         customerName: data.customerName,
@@ -265,20 +255,23 @@ export const createOrder = async (
         orderImage: data.orderImage,
         note: data.note || "",
         routeId: data.routeId || "",
-        createdAt: new Date().toISOString() // Lưu timestamp tạo đơn
+        createdAt: new Date().toISOString()
     };
 
-    if (isGoogleMode()) {
-        try {
-            await callGoogleScript('saveOrder', newOrder);
-        } catch (e) { console.error(e); }
-    } else if (isServerMode()) {
+    if (isServerMode()) {
         try {
             await fetch(`${APP_CONFIG.API_BASE_URL}/api/orders`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(newOrder)
+                body: JSON.stringify({
+                    ...newOrder,
+                    itemsString: data.itemsString
+                })
             });
+        } catch (e) { console.error("PostgreSQL create order error:", e); }
+    } else if (isGoogleMode()) {
+        try {
+            await callGoogleScript('saveOrder', newOrder);
         } catch (e) { console.error(e); }
     }
 
@@ -337,9 +330,27 @@ export const hydrateOrdersWithLocation = async (baseLat: number, baseLng: number
     return updatedOrders;
 };
 
-// --- CUSTOMER SERVICES ---
+// ==========================================================
+// CUSTOMER SERVICES
+// ==========================================================
 
 export const getCustomers = async (): Promise<Customer[]> => {
+    if (isServerMode()) {
+        try {
+            const res = await fetch(`${APP_CONFIG.API_BASE_URL}/api/customers`);
+            if (res.ok) {
+                const data = await res.json();
+                if (Array.isArray(data)) {
+                    localCustomers = data;
+                    saveLocalCustomers();
+                    return data;
+                }
+            }
+        } catch (err) {
+            console.warn("Backend getCustomers error, falling back:", err);
+        }
+    }
+
     if (isGoogleMode()) {
         try {
             const data = await callGoogleScript('getCustomers');
@@ -353,12 +364,30 @@ export const getCustomers = async (): Promise<Customer[]> => {
                 saveLocalCustomers();
                 return uniqueCustomers;
             }
-        } catch (e) { console.error("Lỗi tải khách hàng từ Server:", e); }
+        } catch (e) { console.error("Lỗi tải khách hàng từ Google Sheets:", e); }
     }
     return [...localCustomers];
 };
 
 export const addCustomer = async (customerData: Customer): Promise<Customer> => {
+    if (isServerMode()) {
+        try {
+            const res = await fetch(`${APP_CONFIG.API_BASE_URL}/api/customers`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(customerData)
+            });
+            if (res.ok) {
+                const created = await res.json();
+                localCustomers.unshift(created);
+                saveLocalCustomers();
+                return created;
+            }
+        } catch (err) {
+            console.warn("Backend addCustomer error, falling back:", err);
+        }
+    }
+
     if (isGoogleMode()) {
         try {
             await callGoogleScript('saveCustomer', { 
@@ -367,7 +396,7 @@ export const addCustomer = async (customerData: Customer): Promise<Customer> => 
                 name: customerData.name,
                 phone: String(customerData.phone),
                 address: customerData.address,
-                location: customerData.location // <--- BẠN CHỈ CẦN THÊM ĐÚNG DÒNG NÀY
+                location: customerData.location
             });
         } catch (e) { 
             console.error("Lỗi gọi Google Script:", e);
@@ -380,90 +409,25 @@ export const addCustomer = async (customerData: Customer): Promise<Customer> => 
     return customerData;
 };
 
-export const searchCustomers = (query: string): Promise<Customer[]> => {
-    return new Promise(resolve => {
-        const lowerQuery = query.toLowerCase();
-        const results = localCustomers.filter(c => {
-            const name = (c.name || "").toLowerCase();
-            const phone = String(c.phone || ""); 
-            
-            return name.includes(lowerQuery) || phone.includes(query);
-        });
-        resolve(results);
-    });
-};
+export const searchCustomers = async (query: string): Promise<Customer[]> => {
+    const lowerQuery = query.toLowerCase().trim();
+    if (!lowerQuery) return [];
 
-// --- IMPORT HELPERS ---
-
-export const importKiotVietCustomers = async (kvCustomers: KVCustomer[]): Promise<number> => {
-    let count = 0;
-    const existingIds = new Set(localCustomers.map(c => c.name + c.phone));
-
-    for (const kv of kvCustomers) {
-        if (!existingIds.has(kv.name + kv.contactNumber)) {
-            const addr = kv.address || kv.locationName || 'Chưa cập nhật địa chỉ';
-            const newCust: Customer = {
-                id: `KV-${kv.code}`,
-                name: kv.name,
-                phone: kv.contactNumber || '',
-                address: addr
-            };
-            localCustomers.unshift(newCust);
-            existingIds.add(kv.name + kv.contactNumber);
-            count++;
-            
-            if (isGoogleMode()) callGoogleScript('saveCustomer', { ...newCust, action: 'saveCustomer' }).catch(console.error);
-        }
-    }
-    if (count > 0) saveLocalCustomers();
-    return count;
-};
-
-export const importKiotVietOrders = async (kvInvoices: KVInvoice[]): Promise<number> => {
-    let count = 0;
-    const drivers = await getAllDrivers();
-    const currentOrders = await getOrders();
-    const existingOrderIds = new Set(currentOrders.map(o => o.id));
-
-    for (const inv of kvInvoices) {
-        const orderId = `DH-${inv.code}`;
-        if (!existingOrderIds.has(orderId)) {
-            let address = inv.deliveryDetail?.address || 'Tại cửa hàng';
-            const location = {
-                lat: 10.762622 + (Math.random() - 0.5) * 0.04,
-                lng: 106.660172 + (Math.random() - 0.5) * 0.04
-            };
-            const driver = drivers.length > 0 ? drivers[Math.floor(Math.random() * drivers.length)] : undefined;
-            const items = inv.invoiceDetails.map(d => `${d.productName} (x${d.quantity})`);
-
-            const newOrder: Order = {
-                id: orderId,
-                customerName: inv.customerName || 'Khách lẻ',
-                address: address,
-                location: location,
-                orderValue: inv.total,
-                status: OrderStatus.ASSIGNED,
-                items: items,
-                driverId: driver?.id,
-                driverName: driver?.fullName,
-                createdAt: inv.createdDate || new Date().toISOString()
-            };
-
-            if (isGoogleMode()) {
-                await callGoogleScript('saveOrder', newOrder);
-            } else if (isServerMode()) {
-                await fetch(`${APP_CONFIG.API_BASE_URL}/api/orders`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(newOrder)
-                });
-            } else {
-                localOrders.push(newOrder);
+    if (isServerMode()) {
+        try {
+            const res = await fetch(`${APP_CONFIG.API_BASE_URL}/api/customers/search?q=${encodeURIComponent(lowerQuery)}`);
+            if (res.ok) {
+                const results = await res.json();
+                if (Array.isArray(results)) return results;
             }
-            count++;
+        } catch (err) {
+            console.warn("Backend searchCustomers error, falling back to local:", err);
         }
     }
 
-    if (!isServerMode() && !isGoogleMode() && count > 0) saveLocalOrders();
-    return count;
+    return localCustomers.filter(c => {
+        const name = (c.name || "").toLowerCase();
+        const phone = String(c.phone || ""); 
+        return name.includes(lowerQuery) || phone.includes(lowerQuery);
+    });
 };

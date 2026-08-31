@@ -274,14 +274,30 @@ const CODReport: React.FC<CODReportProps> = ({ orders }) => {
     };
 
     try {
-        await fetch(APP_CONFIG.GOOGLE_SCRIPT_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify(payload)
-        });
-        
-        // Bắt buộc bỏ qua check response.json() vì mode 'no-cors' trả về opaque response
+        let submitted = false;
+        if (APP_CONFIG.API_BASE_URL) {
+            try {
+                const res = await fetch(`${APP_CONFIG.API_BASE_URL}/api/shifts`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    submitted = true;
+                }
+            } catch (svErr) {
+                console.warn("Server shift submit error, falling back to Google Sheets:", svErr);
+            }
+        }
+
+        if (!submitted && APP_CONFIG.GOOGLE_SCRIPT_URL) {
+            await fetch(APP_CONFIG.GOOGLE_SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(payload)
+            });
+        }
         
         const todayStrToSave = new Date().toDateString();
         const newSubmittedIds = [...submittedOrderIds, ...unsubmittedOrders.map(o => o.id)];
