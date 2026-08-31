@@ -65,7 +65,7 @@ export const login = async (username: string, password: string, remember: boolea
     }
     
     const user = users.find((u: any) => 
-        String(u.username).trim() === String(username).trim() && 
+        String(u.username).trim().toLowerCase() === String(username).trim().toLowerCase() && 
         String(u.password).trim() === String(password).trim()
     );
     
