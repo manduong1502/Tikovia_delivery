@@ -218,7 +218,6 @@ const DeliveryFlow: React.FC<DeliveryFlowProps> = ({ order, onOrderUpdate, onBac
 
     const handleClaimOrder = async () => {
         try {
-            setIsProcessing(true);
             const currentUser = getCurrentUser();
             const updatedOrder: Order = {
                 ...order,
@@ -226,13 +225,13 @@ const DeliveryFlow: React.FC<DeliveryFlowProps> = ({ order, onOrderUpdate, onBac
                 driverName: currentUser?.fullName || 'Tài xế',
                 status: OrderStatus.ASSIGNED
             };
+            // ⚡ Cập nhật giao diện tức thì (0ms)
             onOrderUpdate(updatedOrder);
-            await updateOrder(updatedOrder);
+            // ⚡ Đồng bộ ngầm lên máy chủ và Google Sheet
+            updateOrder(updatedOrder).catch(err => console.error("Lỗi đồng bộ nhận đơn:", err));
         } catch (error) {
             console.error("Lỗi khi nhận đơn:", error);
             alert("Không thể nhận đơn hàng này. Vui lòng thử lại!");
-        } finally {
-            setIsProcessing(false);
         }
     };
 
@@ -383,15 +382,18 @@ const DeliveryFlow: React.FC<DeliveryFlowProps> = ({ order, onOrderUpdate, onBac
             overtimeString: overtimeStr
         };
 
-        setIsProcessing(true);
-        try {
-            const savedOrder = await updateOrder(updatedOrder);
-            onOrderUpdate(savedOrder);
-        } catch (e) {
-            setErrorMsg("Lỗi quá trình gửi dữ liệu hệ thống.");
-        } finally {
-            setIsProcessing(false);
-        }
+        // ⚡ CẬP NHẬT TRẠNG THÁI LẬP TỨC (0ms) cho cả màn hình chi tiết và danh sách ngoài trang chủ
+        onOrderUpdate(updatedOrder);
+
+        // ⚡ Đồng bộ ngầm lên PostgreSQL VPS & Google Sheets
+        updateOrder(updatedOrder).catch(e => {
+            console.error("Lỗi đồng bộ ngầm khi hoàn tất đơn:", e);
+        });
+
+        // ⚡ Tự động quay về danh sách sau 600ms để tài xế tiếp tục các đơn khác
+        setTimeout(() => {
+            onBack();
+        }, 600);
     };
 
     const handleDelete = () => {
